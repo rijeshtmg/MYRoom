@@ -32,58 +32,51 @@ export const welcome = (req, res)=>{
 export const preRegister = async (req, res) => {
     // create json web token with email and password then email as clickable link
     // only when user click on that email link, registeration completes 
+    const cors = (req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+      res.setHeader('Access-Control-Allow-Methods', '*');
+      next();
+    };
+    if (req.method === 'OPTIONS') {
+      // handle preflight request
+      res.status(200).end();
+    } else if (req.method === 'POST') {
+      // handle post request
     try{
 
         console.log(req.body);
-        const emailSent = true;
+        // const emailSent = true;
 
         const {email,password} = req.body;
-        const token = jwt.sign({email,password}, config.JWT_SECRET,{
-            expiresIn: "1h",
-        });
-        console.log(token);
+       
+     
 
         if (!validator.validate(email)){
             return res.json({error: " A valid email is required"});
         }
         if (!password){
-            return res.json({error: "Password is required"});
+          return res.json({ error: "Password is required" });
         }
         if (password && password?.length <6){
-            return res.json({error: "Password should be at least 8 characters"});
+          return res.json({ error: "Password should be at least 8 characters" });
         }
         const user = await User.findOne({email});
+        
         if(user){
-            return res.json({error: "Email is taken"})
+          return res.json({ error: "Email is taken" });
         }
-
-        // const {email,password} = req.body;
-        // const token = jwt.sign({email,password}, config.JWT_SECRET,{
-        //     expiresIn: "1h",
-        // });
-
-        
-
-
-        // config.AWSSES.sendEmail(emailTemplate(email, `<p>Please click the link below to activate your account. </p>
-        // <a href="${config.CLIENT_URL}/auth/account-activate${token}"> Activate my account </a>
-        // <p> This activation will expire in 1hr from now.<p>`, config.REPLY_TO, 'Activate Your Account'),
-        // (err, data)=>{
-        //     if(err) {
-        //         console.log(err);
-        //         return res.json({ok: false});
-        //     }
-        //     else{
-        //         console.log(data);
-        //         return res.json({ok: true});
-        //     }
-        // });
-        
+        const token = jwt.sign({email,password}, config.JWT_SECRET,{
+          expiresIn: "1h",
+      });
+      console.log(token);
     }
     catch(err){
         console.log(err)
-        return res.json({error:"Something went wrong. Try again"});
+        return res.json({ error: "Something went wrong. Try again" });
     }
+ 
+    } 
 };
 
 export const register = async (req, res)=>{
