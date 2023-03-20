@@ -1,0 +1,20 @@
+.check{
+padding-left: 2.25rem;
+}
+.rimage-container{
+    background-image: url("../../public/MyRoomLogo.jpg");
+    height:80px;
+    width:180px;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.rbimage{
+    background-image: url("../../public/registerbackground.jpeg");
+    height: 100vh;
+     max-height: 100vh;
+    /* width:840px; */ 
+    background-size:     cover;                      /* <------ */
+    background-repeat:   no-repeat;
+    background-position: start; 
+}

@@ -4,6 +4,7 @@ import {hashPassword, comparePassword} from '../helpers/auth.js';
 import User from '../models/user.js';
 import { nanoid } from "nanoid";
 import validator from 'email-validator';
+import {emailTemplate} from '../helpers/email.js';
 
 const tokenAndUserResponse = (req,res,user) =>{
     const token = jwt.sign({ _id: user._id}, config.JWT_SECRET,{
@@ -30,53 +31,57 @@ export const welcome = (req, res)=>{
 };
 
 export const preRegister = async (req, res) => {
-    // create json web token with email and password then email as clickable link
-    // only when user click on that email link, registeration completes 
-    const cors = (req, res, next) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', '*');
-      res.setHeader('Access-Control-Allow-Methods', '*');
-      next();
-    };
-    if (req.method === 'OPTIONS') {
-      // handle preflight request
-      res.status(200).end();
-    } else if (req.method === 'POST') {
-      // handle post request
-    try{
+  try {
+    const { email, password } = req.body;
 
-        console.log(req.body);
-        // const emailSent = true;
-
-        const {email,password} = req.body;
-       
-     
-
-        if (!validator.validate(email)){
-            return res.json({error: " A valid email is required"});
-        }
-        if (!password){
-          return res.json({ error: "Password is required" });
-        }
-        if (password && password?.length <6){
-          return res.json({ error: "Password should be at least 8 characters" });
-        }
-        const user = await User.findOne({email});
-        
-        if(user){
-          return res.json({ error: "Email is taken" });
-        }
-        const token = jwt.sign({email,password}, config.JWT_SECRET,{
-          expiresIn: "1h",
-      });
-      console.log(token);
+    // check if email is valid
+    if (!validator.validate(email)) {
+      return res.json({ error: "Provide a valid email address" });
     }
-    catch(err){
-        console.log(err)
-        return res.json({ error: "Something went wrong. Try again" });
+    if (!email) {
+      return res.json({ error: "Email is required" });
     }
- 
-    } 
+    // check if email is taken
+    if(!password){
+        return res.json({error: "Password is required"});
+    }
+    if(password && password?.length < 8){
+        return res.json({error: "Password must be at least 8 characters long"});
+    }
+
+    const user = await User.findOne({ email });
+    if(user){
+        return res.json({error: "Email is taken"});
+    }
+
+
+    // generate jwt using email and password
+    const token = jwt.sign({ email, password }, config.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    // send test email
+    config.AWSSES.sendEmail(
+      emailTemplate(
+        email,
+        `
+        <p>Please click the link below to activate your account.</p>
+        <a href="${config.CLIENT_URL}/auth/activate-account/${token}">Activate my account</a>
+    `,
+        config.REPLY_TO,
+        "Welcome to MyRoom"
+      ),
+      (err, data) => {
+        if (err) {
+          return res.json({ error: "Provide a valid email address" });
+        } else {
+          return res.json({ error: "Check email to complete registration" });
+        }
+      }
+    );
+  } catch (err) {
+    console.log(err);
+    res.json({ error: "Something went wrong. Try again." });
+  }
 };
 
 export const register = async (req, res)=>{
@@ -130,29 +135,50 @@ export const login = async (req, res)=>{
     }
 }
 
+
 //forgot password controller
-export const forgotPassword = async (req, res) =>{
-    try{
-        const { email } = req.body;
-        
-        const user = await User.findOne({email});
-        if (!user){
-            return res.json ({error: "Could not find the user with provided email"});
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.json({ error: "Could not find user with that email" });
+    } else {
+      const resetCode = nanoid();
+
+      const token = jwt.sign({ resetCode }, config.JWT_SECRET, {
+        expiresIn: "60m",
+      });
+      // save to user db
+      user.resetCode = resetCode;
+      user.save();
+
+      // send email
+      config.AWSSES.sendEmail(
+        emailTemplate(
+          email,
+          `
+        <p>Please click the link below to recover your account.</p>
+        <a href="${config.CLIENT_URL}/auth/access-account/${token}">Recover my account</a>
+    `,
+          config.REPLY_TO,
+          "Recover your account"
+        ),
+        (err, data) => {
+          if (err) {
+            return res.json({ error: "Provide a valid email address" });
+          } else {
+            return res.json({ ok:true });
+          }
         }
-        else{
-            const resetCode = nanoid();
-            user.resetCode = resetCode;
-            user.save();
-            const token = jwt.sign({resetCode}, config.JWT_SECRET,{expiresIn: '1hr'});
-            console.log("Account found rrecover your account: "+ token);
-            return res.json ({message: "Email found"});
-        }
+      );
     }
-    catch (err){
-        console.log(err);
-        return res.json({ error: "Something went wrong. Try again."})
-    }
-}
+  } catch (err) {
+    console.log(err);
+    res.json({ error: "Something went wrong. Try again." });
+  }
+};
 
 // Acccess account controllers
 export const accessAccount = async (req, res) => {
@@ -236,7 +262,7 @@ export const updatePassword = async (req, res) => {
      const user = await User.findByIdAndUpdate(req.user._id, {
         password: await hashPassword(password),
       });
-      res.json({ ok: "Password has been changed sucessfully" });
+      res.json({ ok:"Password has been changed sucessfully" });
     } catch (err) {
       console.log(err);
       return res.status(403).json({ error: "Unauthorized" });
